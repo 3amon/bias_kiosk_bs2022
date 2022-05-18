@@ -48,6 +48,8 @@ class Game(object):
         return {
             'trait': '',
             'sign': '',
+            'timestamp': '',
+            'button_error_count': 0,
             'hit_times': [],
             'miss_times': []
         }
@@ -83,6 +85,7 @@ class Game(object):
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
+        run_record['timestamp'] = datetime.now()
         return self.do_run(trait, sign, run_record), run_record
 
     def run_miss(self):
@@ -91,6 +94,7 @@ class Game(object):
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
+        run_record['timestamp'] = datetime.now()
         return self.do_run(trait, sign, run_record), run_record
 
     def do_run(self, trait, sign, run_record):
@@ -324,6 +328,7 @@ class Game(object):
                     else:
                         print(start_time)
                         start_time -= timedelta(seconds=1)
+                        run_record['button_error_count'] += 1
                         print(start_time)
                 elif event.key == pygame.K_n:
                     print("No!")
@@ -336,6 +341,7 @@ class Game(object):
                     else:
                         print(start_time)
                         start_time -= timedelta(seconds=1)
+                        run_record['button_error_count'] += 1
                         print(start_time)
 
 
