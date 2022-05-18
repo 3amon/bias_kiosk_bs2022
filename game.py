@@ -21,13 +21,33 @@ class Game(object):
         self.client = MongoClient()
         self.db = self.client.kiosk_database
         self.runs = self.db.runs
+        self.avg_target = 0.0
+        self.avg_miss = 0.0
+
+    def calc_avg(self):
+
+        avg_target = 0.0
+        num_target = 0
+        avg_miss = 0.0
+        num_miss = 0
+        for run in self.runs.find({"target": True}):
+            for target_time in run['hit_times']:
+                avg_target += target_time
+                num_target += 1
+
+        for run in self.runs.find({"target": False}):
+            for miss_time in run['hit_times']:
+                avg_miss += miss_time
+                num_miss += 1
+
+        self.avg_target = avg_target / num_target
+        self.avg_miss = avg_miss / num_miss
 
     @staticmethod
     def get_run_template():
         return {
             'trait': '',
             'sign': '',
-            'target': False,
             'hit_times': [],
             'miss_times': []
         }
@@ -35,15 +55,25 @@ class Game(object):
     def run_game(self):
 
         if choice([True, False]):
-            if not self.run_hit():
+            completed, target_run_record = self.run_hit()
+            if not completed:
                 return False
-            if not self.run_miss():
+            completed, miss_run_record = self.run_miss()
+            if not completed:
                 return False
         else:
-            if not self.run_miss():
+            completed, miss_run_record = self.run_miss()
+            if not completed:
                 return False
-            if not self.run_hit():
+            completed, target_run_record = self.run_hit()
+            if not completed:
                 return False
+
+        run_avg_target = sum(target_run_record['hit_times']) / len(target_run_record['hit_times'])
+        run_avg_miss = sum(miss_run_record['hit_times']) / len(miss_run_record['hit_times'])
+
+
+        self.display_score(run_avg_target, run_avg_miss, target_run_record['trait'], target_run_record['sign'])
 
         return True
 
@@ -53,8 +83,7 @@ class Game(object):
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
-        run_record['target'] = True
-        return self.do_run(trait, sign, run_record)
+        return self.do_run(trait, sign, run_record), run_record
 
     def run_miss(self):
         print("Running Off Target!")
@@ -62,8 +91,7 @@ class Game(object):
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
-        run_record['target'] = False
-        return self.do_run(trait, sign, run_record)
+        return self.do_run(trait, sign, run_record), run_record
 
     def do_run(self, trait, sign, run_record):
 
@@ -104,6 +132,8 @@ class Game(object):
             return trait, TraitMap.get_not_sign(sign), False
 
     def display_start(self):
+
+        self.calc_avg()
 
         grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
         grad_color_end = (0x59, 0x57, 0x75, 0xFF)
@@ -157,7 +187,7 @@ class Game(object):
                 elif event.key == pygame.K_s:
                     return True
 
-    def display_score(self):
+    def display_score(self, run_avg_target, run_avg_miss, trait, sign):
 
         grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
         grad_color_end = (0x59, 0x57, 0x75, 0xFF)
@@ -166,11 +196,22 @@ class Game(object):
         font = pygame.font.Font('freesansbold.ttf', 32)
 
         format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
+        rect_fps = Rect(0, 0, self.w - 4, self.h / 2)
 
         self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
 
-        draw_string(self.windowSurface, "Some stats will be displayed here...",
+        score_string = "\n\nWe had you match the trait {} which is commonly associated with the astrological sign {}.\n\n" \
+                       "You matched that trait on average {:.4f} seconds faster than our control question.\n\n" \
+                       "This does {}indicate the presence of this association being present on a subconscious level.\n\n"\
+                       "{}Have a nice day!"
+
+        delta = (run_avg_miss - run_avg_target) / 1000.0
+        bias = 'not ' if delta <= 0.0 else ''
+        bias2 = '' if delta <= 0.0 else "You are biased! "
+
+        score_string = score_string.format(trait, sign, delta, bias, bias2)
+
+        draw_string(self.windowSurface, score_string,
                     rect_fps, font, format_prompt, text_color)
 
         rect_fps = Rect(0, 0, self.w - 4, self.h)
@@ -180,7 +221,7 @@ class Game(object):
         pygame.display.flip()
 
         while True:
-            event = pygame.event.wait(timeout=GAME_TIMEOUT)
+            event = pygame.event.wait(timeout=GAME_TIMEOUT * 2)
             if event.type == QUIT or event.type == pygame.NOEVENT:
                 return False
             elif pygame.KEYDOWN == event.type:
@@ -190,6 +231,7 @@ class Game(object):
                     return True
 
     def display_prompt(self, target_trait, target_sign, timeout=GAME_TIMEOUT, wait_to_continue=True):
+
         trait_name = target_trait.name
         sign_name = target_sign.name
 
@@ -203,7 +245,7 @@ class Game(object):
         rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
 
         prompt_template = 'Press the GREEN button IF the screen shows BOTH a representation of the {}' \
-                          ' symbol AND a representation of {}. \n\nOTHERWISE press the RED button.'
+                          ' symbol AND the word {}. \n\nOTHERWISE press the RED button.'
 
         prompt = prompt_template.format(sign_name.upper(), trait_name.upper())
 
@@ -275,19 +317,25 @@ class Game(object):
                     print("Yes!")
                     if press_y:
                         hit_time_taken = datetime.now() - start_time
-                        print("Took:", hit_time_taken.microseconds, 'ms')
-                        run_record['hit_times'].append(hit_time_taken.microseconds)
+                        print("Took:", hit_time_taken)
+                        print("Took:", hit_time_taken / timedelta(milliseconds=1))
+                        run_record['hit_times'].append(hit_time_taken / timedelta(milliseconds=1))
                         return True
                     else:
+                        print(start_time)
                         start_time -= timedelta(seconds=1)
+                        print(start_time)
                 elif event.key == pygame.K_n:
                     print("No!")
                     if not press_y:
                         hit_time_taken = datetime.now() - start_time
-                        print("Took:", hit_time_taken.microseconds, 'ms')
-                        run_record['miss_times'].append(hit_time_taken.microseconds)
+                        print("Took:", hit_time_taken)
+                        print("Took:", hit_time_taken / timedelta(milliseconds=1))
+                        run_record['miss_times'].append(hit_time_taken / timedelta(milliseconds=1))
                         return True
                     else:
+                        print(start_time)
                         start_time -= timedelta(seconds=1)
+                        print(start_time)
 
 

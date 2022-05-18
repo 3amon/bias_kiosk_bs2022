@@ -26,7 +26,7 @@ while running:
                 running = False
             elif event.key == pygame.K_s:
                 if game.run_game():
-                    game.display_score()
+                    pass
                 else:
                     game.display_timeout()
                 game.display_start()
