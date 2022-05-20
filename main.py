@@ -8,7 +8,8 @@ from game import Game
 
 pygame.init()
 
-windowSurface = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+windowSurface = pygame.display.set_mode((0, 0), pygame.NOFRAME)
+pygame.display.toggle_fullscreen()
 w, h = pygame.display.get_surface().get_size()
 min_rect = min(w, h)
 
