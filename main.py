@@ -14,6 +14,11 @@ min_rect = min(w, h)
 
 running = True
 game = Game(windowSurface, num_questions=4)
+pygame.joystick.init()
+for i in range(pygame.joystick.get_count()):
+    joystick = pygame.joystick.Joystick(i)
+    joystick.init()
+
 game.display_start()
 
 while running:
@@ -21,15 +26,15 @@ while running:
     for event in events:
         if event.type == QUIT:
             running = False
-        elif pygame.KEYDOWN == event.type:
-            if event.key == pygame.K_ESCAPE:
-                running = False
-            elif event.key == pygame.K_s:
-                if game.run_game():
-                    pass
-                else:
-                    game.display_timeout()
-                game.display_start()
+        elif Game.get_start_event(event):
+            if game.run_game():
+                pass
+            else:
+                game.display_timeout()
+            game.display_start()
+        elif Game.get_esc_event(event):
+            running = False
+
 
 pygame.quit()
 sys.exit()

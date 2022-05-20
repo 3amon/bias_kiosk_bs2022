@@ -24,24 +24,38 @@ class Game(object):
         self.avg_target = 0.0
         self.avg_miss = 0.0
 
-    def calc_avg(self):
 
-        avg_target = 0.0
-        num_target = 0
-        avg_miss = 0.0
-        num_miss = 0
-        for run in self.runs.find({"target": True}):
-            for target_time in run['hit_times']:
-                avg_target += target_time
-                num_target += 1
+    @staticmethod
+    def get_start_event(event):
+        if (event.type == pygame.KEYDOWN and event.key == pygame.K_s) or \
+           (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_B):
+            print("Start!")
+            return True
+        return False
 
-        for run in self.runs.find({"target": False}):
-            for miss_time in run['hit_times']:
-                avg_miss += miss_time
-                num_miss += 1
+    @staticmethod
+    def get_y_event(event):
+        if (event.type == pygame.KEYDOWN and event.key == pygame.K_y) or \
+           (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_Y):
+            print("No!")
+            return True
+        return False
 
-        self.avg_target = avg_target / num_target
-        self.avg_miss = avg_miss / num_miss
+    @staticmethod
+    def get_n_event(event):
+        if (event.type == pygame.KEYDOWN and event.key == pygame.K_n) or \
+           (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_A):
+            print("Yes!")
+            return True
+        return False
+
+    @staticmethod
+    def get_esc_event(event):
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == pygame.NOEVENT:
+            print("ESC!")
+            return True
+        return False
+
 
     @staticmethod
     def get_run_template():
@@ -137,8 +151,6 @@ class Game(object):
 
     def display_start(self):
 
-        self.calc_avg()
-
         grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
         grad_color_end = (0x59, 0x57, 0x75, 0xFF)
         text_color = (0x5E, 0x00, 0x1F)
@@ -183,13 +195,10 @@ class Game(object):
 
         while True:
             event = pygame.event.wait(timeout=3000)
-            if event.type == QUIT or event.type == pygame.NOEVENT:
+            if Game.get_esc_event(event):
                 return False
-            elif pygame.KEYDOWN == event.type:
-                if event.key == pygame.K_ESCAPE:
-                    return False
-                elif event.key == pygame.K_s:
-                    return True
+            if Game.get_start_event(event):
+                return True
 
     def display_score(self, run_avg_target, run_avg_miss, trait, sign):
 
@@ -226,13 +235,10 @@ class Game(object):
 
         while True:
             event = pygame.event.wait(timeout=GAME_TIMEOUT * 2)
-            if event.type == QUIT or event.type == pygame.NOEVENT:
+            if Game.get_esc_event(event):
                 return False
-            elif pygame.KEYDOWN == event.type:
-                if event.key == pygame.K_ESCAPE:
-                    return False
-                elif event.key == pygame.K_s:
-                    return True
+            elif Game.get_start_event(event):
+                return True
 
     def display_prompt(self, target_trait, target_sign, timeout=GAME_TIMEOUT, wait_to_continue=True):
 
@@ -267,13 +273,10 @@ class Game(object):
 
         while True:
             event = pygame.event.wait(timeout=timeout)
-            if event.type == QUIT or event.type == pygame.NOEVENT:
+            if Game.get_esc_event(event):
                 return False
-            elif pygame.KEYDOWN == event.type:
-                if event.key == pygame.K_ESCAPE:
-                    return False
-                elif event.key == pygame.K_s and wait_to_continue:
-                    return True
+            elif Game.get_start_event(event) and wait_to_continue:
+                return True
 
     def run_game_instance(self, target_trait, target_sign, trait: Enum, sign: Enum, press_y: bool, run_record):
 
@@ -312,36 +315,32 @@ class Game(object):
         start_time = datetime.now()
         while True:
             event = pygame.event.wait(timeout=GAME_TIMEOUT)
-            if event.type == QUIT or event.type == pygame.NOEVENT:
+            if Game.get_esc_event(event):
                 return False
-            elif pygame.KEYDOWN == event.type:
-                if event.key == pygame.K_ESCAPE:
-                    return False
-                elif event.key == pygame.K_y:
-                    print("Yes!")
-                    if press_y:
-                        hit_time_taken = datetime.now() - start_time
-                        print("Took:", hit_time_taken)
-                        print("Took:", hit_time_taken / timedelta(milliseconds=1))
-                        run_record['hit_times'].append(hit_time_taken / timedelta(milliseconds=1))
-                        return True
-                    else:
-                        print(start_time)
-                        start_time -= timedelta(seconds=1)
-                        run_record['button_error_count'] += 1
-                        print(start_time)
-                elif event.key == pygame.K_n:
-                    print("No!")
-                    if not press_y:
-                        hit_time_taken = datetime.now() - start_time
-                        print("Took:", hit_time_taken)
-                        print("Took:", hit_time_taken / timedelta(milliseconds=1))
-                        run_record['miss_times'].append(hit_time_taken / timedelta(milliseconds=1))
-                        return True
-                    else:
-                        print(start_time)
-                        start_time -= timedelta(seconds=1)
-                        run_record['button_error_count'] += 1
-                        print(start_time)
+            elif Game.get_y_event(event):
+                if press_y:
+                    hit_time_taken = datetime.now() - start_time
+                    print("Took:", hit_time_taken)
+                    print("Took:", hit_time_taken / timedelta(milliseconds=1))
+                    run_record['hit_times'].append(hit_time_taken / timedelta(milliseconds=1))
+                    return True
+                else:
+                    print(start_time)
+                    start_time -= timedelta(seconds=1)
+                    run_record['button_error_count'] += 1
+                    print(start_time)
+            elif Game.get_n_event(event):
+                if not press_y:
+                    hit_time_taken = datetime.now() - start_time
+                    print("Took:", hit_time_taken)
+                    print("Took:", hit_time_taken / timedelta(milliseconds=1))
+                    run_record['miss_times'].append(hit_time_taken / timedelta(milliseconds=1))
+                    return True
+                else:
+                    print(start_time)
+                    start_time -= timedelta(seconds=1)
+                    run_record['button_error_count'] += 1
+                    print(start_time)
+
 
 

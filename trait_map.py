@@ -20,16 +20,16 @@ class Signs(Enum):
 
 class Traits(Enum):
     Jealousy = auto(),
-    Manipulation = auto(),
-    Arrogance = auto(),
-    Suspicion = auto(),
-    Selfishness = auto(),
-    Narcissism = auto(),
-    Impulsiveness = auto(),
+    Manipulative = auto(),
+    Arrogant = auto(),
+    Suspicious = auto(),
+    Selfish = auto(),
+    Narcissistic = auto(),
+    Impulsive = auto(),
 
 
 hit_map = {
-    Signs.Leo: [Traits.Arrogance],
+    Signs.Leo: [Traits.Arrogant],
     Signs.Scorpio: [Traits.Jealousy]
 }
 
@@ -37,12 +37,12 @@ signs_dir = path.join(getcwd(), "astro_signs")
 
 trait_dirs = {
     Traits.Jealousy: path.join(getcwd(), "traits", "jealous"),
-    Traits.Manipulation: path.join(getcwd(), "traits", "manipulative"),
-    Traits.Arrogance: path.join(getcwd(), "traits", "arrogant"),
-    Traits.Suspicion: path.join(getcwd(), "traits", "suspicious"),
-    Traits.Narcissism: path.join(getcwd(), "traits", "narcissistic"),
-    Traits.Impulsiveness: path.join(getcwd(), "traits", "impulsive"),
-    Traits.Selfishness: path.join(getcwd(), "traits", "selfish"),
+    Traits.Manipulative: path.join(getcwd(), "traits", "manipulative"),
+    Traits.Arrogant: path.join(getcwd(), "traits", "arrogant"),
+    Traits.Suspicious: path.join(getcwd(), "traits", "suspicious"),
+    Traits.Narcissistic: path.join(getcwd(), "traits", "narcissistic"),
+    Traits.Impulsive: path.join(getcwd(), "traits", "impulsive"),
+    Traits.Selfish: path.join(getcwd(), "traits", "selfish"),
 }
 
 sign_paths = {
