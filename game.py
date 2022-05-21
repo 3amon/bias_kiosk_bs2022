@@ -27,6 +27,7 @@ PRESS_START = "[>]Press the START button to continue..."
 TEXT_COLOR = (0x5E, 0x00, 0x1F)
 GRAD_COLOR_START = (0xAB, 0xA6, 0xBF, 0xFF)
 GRAD_COLOR_END = (0x59, 0x57, 0x75, 0xFF)
+FONT_SIZE = 48
 
 TIMEOUT_EVENT = pygame.USEREVENT + 1
 
@@ -34,7 +35,7 @@ clock = pygame.time.Clock()
 
 class Cursor(pygame.sprite.Sprite):
 
-    def __init__(self, board, pos, size):
+    def __init__(self, board, pos, size=FONT_SIZE):
         pygame.sprite.Sprite.__init__(self)
         self.pos = pos
         self.image = pygame.Surface(pos, pygame.SRCALPHA)
@@ -220,7 +221,7 @@ class Game(pygame.sprite.Sprite):
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w/10, self.h / 6), 64)
+        cursor = Cursor(self, (self.w/10, self.h / 6), FONT_SIZE)
         all_sprites.add(cursor)
 
         cursor.write("[>]Welcome to the astrological implicit bias test kiosk!\n\n[>]Press the START button to begin...")
@@ -251,7 +252,7 @@ class Game(pygame.sprite.Sprite):
         prompt += '\n\n' + PRESS_START
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w / 10, self.h / 6), 64)
+        cursor = Cursor(self, (self.w / 10, self.h / 6), FONT_SIZE)
         all_sprites.add(cursor)
 
         cursor.write(prompt)
@@ -275,7 +276,7 @@ class Game(pygame.sprite.Sprite):
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w/10, self.h / 6), 64)
+        cursor = Cursor(self, (self.w/10, self.h / 6), FONT_SIZE)
         all_sprites.add(cursor)
 
         cursor.write("[>]Student was too slow!\n[>]Womp womp...")
@@ -309,7 +310,7 @@ class Game(pygame.sprite.Sprite):
         score_string = score_string.format(trait, sign, delta, bias, bias2)
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w / 10, self.h / 6), 64)
+        cursor = Cursor(self, (self.w / 10, self.h / 6), FONT_SIZE)
         all_sprites.add(cursor)
 
         cursor.write(score_string)
@@ -332,7 +333,7 @@ class Game(pygame.sprite.Sprite):
         start_time = datetime.now()
         trait_name = target_trait.name
         sign_name = target_sign.name
-        font = pygame.font.SysFont("monospace", 64)
+        font = pygame.font.SysFont("monospace", FONT_SIZE)
         format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
         prompt_template = 'Press green if both {} and {} are displayed.\nOtherwise press red.'
 
