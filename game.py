@@ -9,12 +9,68 @@ from enum import Enum
 from trait_map import TraitMap
 from pymongo import MongoClient
 from uuid import uuid4
+import pygame
 
-GAME_TIMEOUT = 15000
+GAME_TIMEOUT = 60000
+GAME_TIMEOUT_SHORT = 10000
+PROMPT_TEMPLATE = '[>]Press the green button if the screen shows both\n   a representation of the {}' \
+                  ' symbol and\n   the word {}. \n\n[>]Otherwise press the red button.'
 
-class Game(object):
+PRESS_START = "[>]Press the START button to continue..."
+
+TEXT_COLOR = (0x5E, 0x00, 0x1F)
+GRAD_COLOR_START = (0xAB, 0xA6, 0xBF, 0xFF)
+GRAD_COLOR_END = (0x59, 0x57, 0x75, 0xFF)
+
+TIMEOUT_EVENT = pygame.USEREVENT + 1
+
+clock = pygame.time.Clock()
+
+class Cursor(pygame.sprite.Sprite):
+
+    def __init__(self, board, pos, size):
+        pygame.sprite.Sprite.__init__(self)
+        self.pos = pos
+        self.image = pygame.Surface(pos, pygame.SRCALPHA)
+        self.text_height = 17 / 18.0 * size
+        self.text_width = 10 / 18.0 * size
+        self.rect = self.image.get_rect(topleft=(self.pos[0] + self.text_width, self.pos[1] + self.text_height))
+        self.board = board
+        self.font = pygame.font.SysFont("monospace", size)
+        self.text = ''
+        self.cooldown = 0
+        self.cooldowns = {'.': 12,
+                        '[': 18,
+                        ']': 18,
+                        ' ': 5,
+                        '\n': 5}
+
+    @property
+    def done(self):
+        return not self.text
+
+    def write(self, text):
+        self.text = list(text)
+
+    def update(self):
+        if not self.cooldown and self.text:
+            letter = self.text.pop(0)
+            if letter == '\n':
+                self.rect.move_ip((0, self.text_height))
+                self.rect.x = self.text_width + self.pos[0]
+            else:
+                s = self.font.render(letter, True, TEXT_COLOR)
+                self.board.add_letter(s, self.rect.topleft)
+                self.rect.move_ip((self.text_width, 0))
+            self.cooldown = self.cooldowns.get(letter, 3)
+
+        if self.cooldown:
+            self.cooldown -= 1
+
+class Game(pygame.sprite.Sprite):
 
     def __init__(self, windowSurface, num_questions=10):
+        pygame.sprite.Sprite.__init__(self)
         self.num_questions = num_questions
         self.windowSurface = windowSurface
         self.w, self.h = pygame.display.get_surface().get_size()
@@ -25,11 +81,14 @@ class Game(object):
         self.avg_target = 0.0
         self.avg_miss = 0.0
 
+    def add_letter(self, s, pos):
+        self.windowSurface.blit(s, pos)
 
     @staticmethod
     def get_start_event(event):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_s) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_B):
+            pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             print("Start!")
             return True
         return False
@@ -38,6 +97,7 @@ class Game(object):
     def get_y_event(event):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_y) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_Y):
+            pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             print("No!")
             return True
         return False
@@ -46,17 +106,21 @@ class Game(object):
     def get_n_event(event):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_n) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_A):
+            pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             print("Yes!")
             return True
         return False
 
     @staticmethod
-    def get_esc_event(event):
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == pygame.NOEVENT:
+    def get_esc_event(event, watch_timeout=True):
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == TIMEOUT_EVENT and watch_timeout:
+            if event.type == TIMEOUT_EVENT:
+                pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT_SHORT, loops=1)
+            else:
+                pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             print("ESC!")
             return True
         return False
-
 
     @staticmethod
     def get_run_template():
@@ -92,7 +156,6 @@ class Game(object):
         run_avg_target = sum(target_run_record['hit_times']) / len(target_run_record['hit_times'])
         run_avg_miss = sum(miss_run_record['hit_times']) / len(miss_run_record['hit_times'])
 
-
         self.display_score(run_avg_target, run_avg_miss, target_run_record['trait'], target_run_record['sign'])
 
         return True
@@ -125,7 +188,6 @@ class Game(object):
         if not self.display_prompt(trait, sign):
             return False
         for on_target in run_hits:
-            self.display_prompt(trait, sign, timeout=500, wait_to_continue=False)
             if not self.run_instance_with_target(trait, sign, run_record, on_target):
                 print("Aborted!")
                 return False
@@ -157,155 +219,137 @@ class Game(object):
 
     def display_start(self):
 
-        grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
-        grad_color_end = (0x59, 0x57, 0x75, 0xFF)
-        text_color = (0x5E, 0x00, 0x1F)
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-        font = pygame.font.Font('freesansbold.ttf', 32)
+        all_sprites = pygame.sprite.Group()
+        cursor = Cursor(self, (self.w/10, self.h / 6), 64)
+        all_sprites.add(cursor)
 
-        format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
+        cursor.write("[>]Welcome to the astrological implicit bias test kiosk!\n\n[>]Press the START button to begin...")
 
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
+        running = True
+        while running:
 
-        draw_string(self.windowSurface, "Welcome to the astrological implicit bias test kiosk!",
-                    rect_fps, font, format_prompt, text_color)
+            events = pygame.event.get()
+            for event in events:
+                if Game.get_esc_event(event, False):
+                    return False
+                if Game.get_start_event(event) and cursor.done:
+                    return True
 
-        rect_fps = Rect(0, 0, self.w - 4, self.h)
-        draw_string(self.windowSurface, "Press the START button to begin...",
-                    rect_fps, font, format_prompt, text_color)
+            all_sprites.update()
+            all_sprites.draw(self.windowSurface)
+            pygame.display.flip()
+            clock.tick(60)
 
-        pygame.display.flip()
+    def display_prompt(self, target_trait, target_sign):
+        trait_name = target_trait.name
+        sign_name = target_sign.name
+
+        prompt = PROMPT_TEMPLATE.format(sign_name.upper(), trait_name.upper())
+
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
+
+
+        prompt += '\n\n' + PRESS_START
+
+        all_sprites = pygame.sprite.Group()
+        cursor = Cursor(self, (self.w / 10, self.h / 6), 64)
+        all_sprites.add(cursor)
+
+        cursor.write(prompt)
+
+        while True:
+            events = pygame.event.get()
+            for event in events:
+                if Game.get_esc_event(event):
+                    return False
+                elif Game.get_start_event(event) and cursor.done:
+                    return True
+
+            all_sprites.update()
+            all_sprites.draw(self.windowSurface)
+            pygame.display.flip()
+            clock.tick(60)
+
 
     def display_timeout(self):
 
-        grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
-        grad_color_end = (0x59, 0x57, 0x75, 0xFF)
-        text_color = (0x5E, 0x00, 0x1F)
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-        font = pygame.font.Font('freesansbold.ttf', 32)
+        all_sprites = pygame.sprite.Group()
+        cursor = Cursor(self, (self.w/10, self.h / 6), 64)
+        all_sprites.add(cursor)
 
-        format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
-
-        draw_string(self.windowSurface, "",
-                    rect_fps, font, format_prompt, text_color)
-
-        rect_fps = Rect(0, 0, self.w - 4, self.h)
-        draw_string(self.windowSurface, "Student was too slow... test timed out... womp womp",
-                    rect_fps, font, format_prompt, text_color)
-
-        pygame.display.flip()
+        cursor.write("[>]Student was too slow!\n[>]Womp womp...")
 
         while True:
-            event = pygame.event.wait(timeout=3000)
-            if Game.get_esc_event(event):
-                return False
-            if Game.get_start_event(event):
-                return True
+            events = pygame.event.get()
+            for event in events:
+                if Game.get_esc_event(event):
+                    return False
+                elif Game.get_start_event(event):
+                    return True
+
+            all_sprites.update()
+            all_sprites.draw(self.windowSurface)
+            pygame.display.flip()
+            clock.tick(60)
 
     def display_score(self, run_avg_target, run_avg_miss, trait, sign):
 
-        grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
-        grad_color_end = (0x59, 0x57, 0x75, 0xFF)
-        text_color = (0x5E, 0x00, 0x1F)
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-        font = pygame.font.Font('freesansbold.ttf', 32)
-
-        format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 2)
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
-
-        score_string = "\n\nWe had you match the trait {} which is commonly associated with the astrological sign {}.\n\n" \
-                       "You matched that trait on average {:.4f} seconds faster than our control question.\n\n" \
-                       "This does {}indicate the presence of this association being present on a subconscious level.\n\n"\
-                       "{}Have a nice day!"
+        score_string = "[>]We had you match the trait {} which\n   is commonly associated with the\n   astrological sign {}.\n" \
+                       "[>]You matched that trait on average {:0.3f}\n   seconds faster than our control question.\n" \
+                       "[>]This {} that this association is\n   present on a subconscious level.\n" \
+                       "{}[>]Have a nice day!"
 
         delta = (run_avg_miss - run_avg_target) / 1000.0
-        bias = 'not ' if delta <= 0.0 else ''
-        bias2 = '' if delta <= 0.0 else "You are biased! "
+        bias = 'does not indicate' if delta <= 0.0 else 'indicates'
+        bias2 = '' if delta <= 0.0 else "[>]You are biased!\n"
 
         score_string = score_string.format(trait, sign, delta, bias, bias2)
 
-        draw_string(self.windowSurface, score_string,
-                    rect_fps, font, format_prompt, text_color)
+        all_sprites = pygame.sprite.Group()
+        cursor = Cursor(self, (self.w / 10, self.h / 6), 64)
+        all_sprites.add(cursor)
 
-        rect_fps = Rect(0, 0, self.w - 4, self.h)
-        draw_string(self.windowSurface, "Press the START button to continue...",
-                    rect_fps, font, format_prompt, text_color)
-
-        pygame.display.flip()
+        cursor.write(score_string)
 
         while True:
-            event = pygame.event.wait(timeout=GAME_TIMEOUT * 2)
-            if Game.get_esc_event(event):
-                return False
-            elif Game.get_start_event(event):
-                return True
+            events = pygame.event.get()
+            for event in events:
+                if Game.get_esc_event(event):
+                    return False
+                elif Game.get_start_event(event):
+                    return True
 
-    def display_prompt(self, target_trait, target_sign, timeout=GAME_TIMEOUT, wait_to_continue=True):
+            all_sprites.update()
+            all_sprites.draw(self.windowSurface)
+            pygame.display.flip()
+            clock.tick(60)
 
-        trait_name = target_trait.name
-        sign_name = target_sign.name
-
-        grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
-        grad_color_end = (0x59, 0x57, 0x75, 0xFF)
-        text_color = (0x5E, 0x00, 0x1F)
-
-        font = pygame.font.Font('freesansbold.ttf', 32)
-
-        format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
-
-        prompt_template = 'Press the GREEN button IF the screen shows BOTH a representation of the {}' \
-                          ' symbol AND the word {}. \n\nOTHERWISE press the RED button.'
-
-        prompt = prompt_template.format(sign_name.upper(), trait_name.upper())
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
-
-        draw_string(self.windowSurface, prompt,
-                    rect_fps, font, format_prompt, text_color)
-
-        if wait_to_continue:
-            rect_fps = Rect(0, 0, self.w - 4, self.h)
-            draw_string(self.windowSurface, "Press the START button to continue...",
-                        rect_fps, font, format_prompt, text_color)
-
-        pygame.display.flip()
-
-        while True:
-            event = pygame.event.wait(timeout=timeout)
-            if Game.get_esc_event(event):
-                return False
-            elif Game.get_start_event(event) and wait_to_continue:
-                return True
 
     def run_game_instance(self, target_trait, target_sign, trait: Enum, sign: Enum, press_y: bool, run_record):
 
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
+
         trait_name = target_trait.name
         sign_name = target_sign.name
 
-        grad_color_start = (0xAB, 0xA6, 0xBF, 0xFF)
-        grad_color_end = (0x59, 0x57, 0x75, 0xFF)
-        text_color = (0x5E, 0x00, 0x1F)
-
-        font = pygame.font.Font('freesansbold.ttf', 32)
+        font = pygame.font.SysFont("monospace", 64)
 
         format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
         rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
 
-        prompt_template = 'Press the GREEN button IF the screen shows BOTH a representation of the {}' \
-                          ' symbol AND a representation of {}. \n\nOTHERWISE press the RED button.'
+        prompt_template = 'Press green if both {} and {} are displayed.\nOtherwise press red.'
 
         prompt = prompt_template.format(sign_name.upper(), trait_name.upper())
 
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), grad_color_start, grad_color_end), (1, 1))
         draw_string(self.windowSurface, prompt,
-                    rect_fps, font, format_prompt, text_color)
+                    rect_fps, font, format_prompt, TEXT_COLOR)
+
 
         sign_img = pygame.image.load(TraitMap.get_sign_img(sign))
         sign_img = pygame.transform.scale(sign_img, (self.min_rect / 2, self.min_rect / 2))
