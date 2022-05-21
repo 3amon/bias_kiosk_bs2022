@@ -8,6 +8,7 @@ from random import choice, shuffle
 from enum import Enum
 from trait_map import TraitMap
 from pymongo import MongoClient
+from uuid import uuid4
 
 GAME_TIMEOUT = 15000
 
@@ -18,7 +19,7 @@ class Game(object):
         self.windowSurface = windowSurface
         self.w, self.h = pygame.display.get_surface().get_size()
         self.min_rect = min(self.w, self.h)
-        self.client = MongoClient()
+        self.client = MongoClient(uuidRepresentation='standard')
         self.db = self.client.kiosk_database
         self.runs = self.db.runs
         self.avg_target = 0.0
@@ -63,6 +64,7 @@ class Game(object):
             'trait': '',
             'sign': '',
             'timestamp': '',
+            'guid': '',
             'button_error_count': 0,
             'hit_times': [],
             'miss_times': []
@@ -70,18 +72,20 @@ class Game(object):
 
     def run_game(self):
 
+        guid = uuid4()
+
         if choice([True, False]):
-            completed, target_run_record = self.run_hit()
+            completed, target_run_record = self.run_hit(guid)
             if not completed:
                 return False
-            completed, miss_run_record = self.run_miss()
+            completed, miss_run_record = self.run_miss(guid)
             if not completed:
                 return False
         else:
-            completed, miss_run_record = self.run_miss()
+            completed, miss_run_record = self.run_miss(guid)
             if not completed:
                 return False
-            completed, target_run_record = self.run_hit()
+            completed, target_run_record = self.run_hit(guid)
             if not completed:
                 return False
 
@@ -93,22 +97,24 @@ class Game(object):
 
         return True
 
-    def run_hit(self):
+    def run_hit(self, guid):
         print("Running On Target!")
         trait, sign = TraitMap.get_random_target_trait_sign_pair()
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
         run_record['timestamp'] = datetime.now()
+        run_record['guid'] = guid
         return self.do_run(trait, sign, run_record), run_record
 
-    def run_miss(self):
+    def run_miss(self, guid):
         print("Running Off Target!")
         trait, sign = TraitMap.get_random_nontarget_trait_sign_pair()
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
         run_record['timestamp'] = datetime.now()
+        run_record['guid'] = guid
         return self.do_run(trait, sign, run_record), run_record
 
     def do_run(self, trait, sign, run_record):
