@@ -13,8 +13,14 @@ import pygame
 
 GAME_TIMEOUT = 60000
 GAME_TIMEOUT_SHORT = 10000
-PROMPT_TEMPLATE = '[>]Press the green button if the screen shows both\n   a representation of the {}' \
-                  ' symbol and\n   the word {}. \n\n[>]Otherwise press the red button.'
+PROMPT_TEMPLATE = '[>]Section {} of {}\n\n' \
+                  '[>]You will be shown a sequence of {} prompts.\n' \
+                  '[>]Each prompt will consist of an astrological sign\n' \
+                  '   and a personality trait.\n' \
+                  '[>]When each prompt is shown, press the green\n' \
+                  '   button if the screen shows both a representation\n' \
+                  '   of the {} symbol and the word {}. \n' \
+                  '[>]Otherwise press the red button.'
 
 PRESS_START = "[>]Press the START button to continue..."
 
@@ -89,7 +95,6 @@ class Game(pygame.sprite.Sprite):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_s) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_B):
             pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
-            print("Start!")
             return True
         return False
 
@@ -98,7 +103,6 @@ class Game(pygame.sprite.Sprite):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_y) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_Y):
             pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
-            print("No!")
             return True
         return False
 
@@ -107,7 +111,6 @@ class Game(pygame.sprite.Sprite):
         if (event.type == pygame.KEYDOWN and event.key == pygame.K_n) or \
            (event.type == pygame.JOYBUTTONDOWN and event.button == pygame.CONTROLLER_BUTTON_A):
             pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
-            print("Yes!")
             return True
         return False
 
@@ -118,7 +121,6 @@ class Game(pygame.sprite.Sprite):
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT_SHORT, loops=1)
             else:
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
-            print("ESC!")
             return True
         return False
 
@@ -139,17 +141,17 @@ class Game(pygame.sprite.Sprite):
         guid = uuid4()
 
         if choice([True, False]):
-            completed, target_run_record = self.run_hit(guid)
+            completed, target_run_record = self.run_hit(guid, 1)
             if not completed:
                 return False
-            completed, miss_run_record = self.run_miss(guid)
+            completed, miss_run_record = self.run_miss(guid, 2)
             if not completed:
                 return False
         else:
-            completed, miss_run_record = self.run_miss(guid)
+            completed, miss_run_record = self.run_miss(guid, 1)
             if not completed:
                 return False
-            completed, target_run_record = self.run_hit(guid)
+            completed, target_run_record = self.run_hit(guid, 2)
             if not completed:
                 return False
 
@@ -160,39 +162,35 @@ class Game(pygame.sprite.Sprite):
 
         return True
 
-    def run_hit(self, guid):
-        print("Running On Target!")
+    def run_hit(self, guid, section_num: int):
         trait, sign = TraitMap.get_random_target_trait_sign_pair()
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
         run_record['timestamp'] = datetime.now()
         run_record['guid'] = guid
-        return self.do_run(trait, sign, run_record), run_record
+        return self.do_run(trait, sign, run_record, section_num), run_record
 
-    def run_miss(self, guid):
-        print("Running Off Target!")
+    def run_miss(self, guid, section_num: int):
         trait, sign = TraitMap.get_random_nontarget_trait_sign_pair()
         run_record = self.get_run_template()
         run_record['trait'] = trait.name
         run_record['sign'] = sign.name
         run_record['timestamp'] = datetime.now()
         run_record['guid'] = guid
-        return self.do_run(trait, sign, run_record), run_record
+        return self.do_run(trait, sign, run_record, section_num), run_record
 
-    def do_run(self, trait, sign, run_record):
+    def do_run(self, trait, sign, run_record, section_num: int):
 
         run_hits = ([False] * int(self.num_questions / 2))
         run_hits = run_hits + ([True] * int((self.num_questions + 1) / 2))
         shuffle(run_hits)
-        if not self.display_prompt(trait, sign):
+        if not self.display_prompt(trait, sign, section_num):
             return False
         for on_target in run_hits:
             if not self.run_instance_with_target(trait, sign, run_record, on_target):
-                print("Aborted!")
                 return False
 
-        print("DONE!")
         self.runs.insert_one(run_record)
         return True
 
@@ -242,14 +240,13 @@ class Game(pygame.sprite.Sprite):
             pygame.display.flip()
             clock.tick(60)
 
-    def display_prompt(self, target_trait, target_sign):
+    def display_prompt(self, target_trait, target_sign, section_num: int, num_sections=2):
         trait_name = target_trait.name
         sign_name = target_sign.name
 
-        prompt = PROMPT_TEMPLATE.format(sign_name.upper(), trait_name.upper())
+        prompt = PROMPT_TEMPLATE.format(section_num, num_sections, self.num_questions, sign_name.upper(), trait_name.upper())
 
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
-
 
         prompt += '\n\n' + PRESS_START
 
@@ -332,65 +329,96 @@ class Game(pygame.sprite.Sprite):
 
 
     def run_game_instance(self, target_trait, target_sign, trait: Enum, sign: Enum, press_y: bool, run_record):
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
-
+        start_time = datetime.now()
         trait_name = target_trait.name
         sign_name = target_sign.name
-
         font = pygame.font.SysFont("monospace", 64)
-
         format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
-        rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
-
         prompt_template = 'Press green if both {} and {} are displayed.\nOtherwise press red.'
 
         prompt = prompt_template.format(sign_name.upper(), trait_name.upper())
 
-        draw_string(self.windowSurface, prompt,
-                    rect_fps, font, format_prompt, TEXT_COLOR)
+        first_run = True
+        first_miss = True
 
-
-        sign_img = pygame.image.load(TraitMap.get_sign_img(sign))
-        sign_img = pygame.transform.scale(sign_img, (self.min_rect / 2, self.min_rect / 2))
-
-        trait_img = pygame.image.load(TraitMap.get_random_trait_img(trait)).convert_alpha()
-        trait_img = pygame.transform.scale(trait_img, (self.min_rect / 2, self.min_rect / 2))
-
-        self.windowSurface.blit(sign_img, (self.w / 4 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
-        self.windowSurface.blit(trait_img,
-                                (self.w / 4 - (self.min_rect / 4) + self.w / 2, self.h / 2 - (self.min_rect / 4)))
-        pygame.display.flip()
-
-        start_time = datetime.now()
         while True:
+
+            self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
+
+            rect_fps = Rect(0, 0, self.w - 4, self.h / 6)
+
+            draw_string(self.windowSurface, prompt,
+                        rect_fps, font, format_prompt, TEXT_COLOR)
+
+            sign_img = pygame.image.load(TraitMap.get_sign_img(sign))
+            sign_img = pygame.transform.scale(sign_img, (self.min_rect / 2, self.min_rect / 2))
+
+            trait_img = pygame.image.load(TraitMap.get_random_trait_img(trait)).convert_alpha()
+            trait_img = pygame.transform.scale(trait_img, (self.min_rect / 2, self.min_rect / 2))
+
+            x_img = pygame.image.load('x_bad_button.png').convert_alpha()
+            check_img = pygame.image.load('check_good_button.png').convert_alpha()
+
+            if first_run:
+                pygame.display.flip()
+                pygame.time.delay(1000)
+
+            self.windowSurface.blit(sign_img, (self.w / 4 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
+
+            if first_run:
+                pygame.display.flip()
+                pygame.time.delay(100)
+                pygame.event.clear()
+
+            self.windowSurface.blit(trait_img,
+                                    (self.w / 4 - (self.min_rect / 4) + self.w / 2, self.h / 2 - (self.min_rect / 4)))
+            pygame.display.flip()
+
+            first_run = False
+
             event = pygame.event.wait(timeout=GAME_TIMEOUT)
             if Game.get_esc_event(event):
                 return False
             elif Game.get_y_event(event):
                 if press_y:
                     hit_time_taken = datetime.now() - start_time
-                    print("Took:", hit_time_taken)
-                    print("Took:", hit_time_taken / timedelta(milliseconds=1))
                     run_record['hit_times'].append(hit_time_taken / timedelta(milliseconds=1))
+                    self.windowSurface.blit(check_img,
+                                            (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
+
+                    pygame.display.flip()
+                    pygame.time.delay(500)
                     return True
                 else:
-                    print(start_time)
-                    start_time -= timedelta(seconds=1)
                     run_record['button_error_count'] += 1
-                    print(start_time)
+                    self.windowSurface.blit(x_img,
+                                            (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
+
+                    pygame.display.flip()
+                    if first_miss:
+                        pygame.time.delay(1000)
+                        first_miss = False
+
             elif Game.get_n_event(event):
                 if not press_y:
                     hit_time_taken = datetime.now() - start_time
-                    print("Took:", hit_time_taken)
-                    print("Took:", hit_time_taken / timedelta(milliseconds=1))
                     run_record['miss_times'].append(hit_time_taken / timedelta(milliseconds=1))
+                    self.windowSurface.blit(check_img,
+                                            (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
+
+                    pygame.display.flip()
+                    pygame.time.delay(500)
                     return True
                 else:
-                    print(start_time)
-                    start_time -= timedelta(seconds=1)
                     run_record['button_error_count'] += 1
-                    print(start_time)
+                    self.windowSurface.blit(x_img,
+                                            (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
+
+                    pygame.display.flip()
+                    if first_miss:
+                        pygame.time.delay(1000)
+                        first_miss = False
+
 
 
 
