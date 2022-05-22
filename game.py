@@ -257,7 +257,7 @@ class Game(pygame.sprite.Sprite):
             word = TraitMap.get_random_bad_word()
 
         first_run = True
-
+        pygame.event.clear()
         while True:
             font = pygame.font.SysFont("monospace", FONT_SIZE)
             self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
@@ -323,7 +323,7 @@ class Game(pygame.sprite.Sprite):
 
                     pygame.display.flip()
                     if first_miss:
-                        pygame.time.delay(1000)
+                        pygame.time.delay(500)
                         first_miss = False
 
             elif Game.get_n_event(event):
@@ -343,7 +343,7 @@ class Game(pygame.sprite.Sprite):
 
                     pygame.display.flip()
                     if first_miss:
-                        #pygame.time.delay(1000)
+                        pygame.time.delay(500)
                         pass
                         first_miss = False
 
