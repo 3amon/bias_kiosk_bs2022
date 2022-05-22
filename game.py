@@ -262,14 +262,14 @@ class Game(pygame.sprite.Sprite):
             font = pygame.font.SysFont("monospace", FONT_SIZE)
             self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-            rect_fps = Rect(0, 0, 400, self.h / 6)
+            rect_fps = Rect(0, 0, 300, self.h / 6)
 
             format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
 
             draw_string(self.windowSurface, left_text,
                         rect_fps, font, format_prompt, (0x00, 0xFF, 0x00))
 
-            rect_fps = Rect(self.w - self.w/6, self.h/100, 500, self.h / 6)
+            rect_fps = Rect(self.w - self.w/5, self.h/100, 400, self.h / 6)
 
             draw_string(self.windowSurface, right_text,
                         rect_fps, font, format_prompt, (0xFF, 0x00, 0x00))
