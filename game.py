@@ -85,6 +85,12 @@ ALLOW_START_SKIP = True
 
 clock = pygame.time.Clock()
 
+
+def resize_keep_ratio(src, max_px):
+    rnd = min(max_px / src[0], max_px / src[1])
+    return src[0] * rnd, src[1] * rnd
+
+
 class Cursor(pygame.sprite.Sprite):
 
     def __init__(self, board, pos, size=FONT_SIZE):
@@ -205,6 +211,9 @@ class Game(pygame.sprite.Sprite):
 
             if i == 2 or i == 3:
                 self.num_questions = self.base_num_questions * 2
+            elif i == 0:
+                self.num_questions = int(self.base_num_questions / 2)
+                self.num_questions = self.base_num_questions
             else:
                 self.num_questions = self.base_num_questions
 
@@ -268,9 +277,9 @@ class Game(pygame.sprite.Sprite):
         start_time = datetime.now()
 
         x_img = pygame.image.load('x_bad_button.png').convert_alpha()
-        x_img = pygame.transform.scale(x_img, (self.min_rect / 2, self.min_rect / 2))
+        x_img = pygame.transform.smoothscale(x_img, (self.min_rect / 2, self.min_rect / 2))
         check_img = pygame.image.load('check_good_button.png').convert_alpha()
-        check_img = pygame.transform.scale(check_img, (self.min_rect / 2, self.min_rect / 2))
+        check_img = pygame.transform.smoothscale(check_img, (self.min_rect / 2, self.min_rect / 2))
 
         if press_green:
             sign_img = pygame.image.load(TraitMap.get_sign_img(sign1)) if not phase == 3 else pygame.image.load(TraitMap.get_sign_img(sign2))
@@ -279,6 +288,8 @@ class Game(pygame.sprite.Sprite):
         else:
             sign_img = pygame.image.load(TraitMap.get_sign_img(sign2)) if not phase == 3 else pygame.image.load(TraitMap.get_sign_img(sign1))
             word = TraitMap.get_random_bad_word()
+
+        sign_img = pygame.transform.smoothscale(sign_img, resize_keep_ratio(sign_img.get_size(), self.min_rect / 2))
 
         first_run = True
         pygame.event.clear()
@@ -298,7 +309,7 @@ class Game(pygame.sprite.Sprite):
             draw_string(self.windowSurface, right_text,
                         rect_fps, font, format_prompt, (0xFF, 0x00, 0x00))
 
-            sign_img = pygame.transform.scale(sign_img, (self.min_rect / 2, self.min_rect / 2))
+
 
             if first_run:
                 pygame.display.flip()
@@ -458,7 +469,7 @@ class Game(pygame.sprite.Sprite):
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
         delta = (trait1_good_sum - trait2_good_sum) / 1000.0
-        if delta > 0:
+        if delta < 0:
             score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta))
         else:
             score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta))
