@@ -74,7 +74,7 @@ trait_dirs = {
     Traits.Selfish: path.join(getcwd(), "traits", "selfish"),
 }
 
-sign_paths = {
+sign_paths_old = {
     Signs.Aquarius: path.join(signs_dir, "Astrological_sign_Aquarius_at_the_Wisconsin_State_Capitol.jpeg"),
     Signs.Aries: path.join(signs_dir, "Astrological_sign_Aries_at_the_Wisconsin_State_Capitol.jpeg"),
     Signs.Virgo: path.join(signs_dir, "Astrological_sign_Virgo_at_the_Wisconsin_State_Capitol.jpeg"),
@@ -87,6 +87,21 @@ sign_paths = {
     Signs.Sagittarius: path.join(signs_dir, "Sagittarius_Astrological_Sign_at_the_Wisconsin_State_Capitol.jpeg"),
     Signs.Scorpio: path.join(signs_dir, "Scorpio_Astrological_Sign_at_the_Wisconsin_State_Capitol.jpeg"),
     Signs.Taurus: path.join(signs_dir, "Taurus_Astrological_Sign_at_the_Wisconsin_State_Capitol.jpeg")
+}
+
+sign_paths = {
+    Signs.Aquarius: path.join(signs_dir, "aquarius.png"),
+    Signs.Aries: path.join(signs_dir, "aries.png"),
+    Signs.Virgo: path.join(signs_dir, "virgo.png"),
+    Signs.Cancer: path.join(signs_dir, "cancer.png"),
+    Signs.Capricorn: path.join(signs_dir, "capricorn.png"),
+    Signs.Gemini: path.join(signs_dir, "gemini.png"),
+    Signs.Leo: path.join(signs_dir, "leo.png"),
+    Signs.Libra: path.join(signs_dir, "libra.png"),
+    Signs.Pisces: path.join(signs_dir, "pisces.png"),
+    Signs.Sagittarius: path.join(signs_dir, "sagittarius.png"),
+    Signs.Scorpio: path.join(signs_dir, "scorpio.png"),
+    Signs.Taurus: path.join(signs_dir, "taurus.png")
 }
 
 

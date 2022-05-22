@@ -15,33 +15,35 @@ GAME_TIMEOUT = 60000
 GAME_TIMEOUT_SHORT = 10000
 PROMPT_TEMPLATE_1 = '[>]Section 1 of 4\n\n' \
                     '[>]You will be shown a sequence of {0} images.\n' \
-                    '[>]Each will consist of a representation of the sign {1}\n' \
-                    '   or the sign {2}.\n' \
-                    '[>]Put your left hand on the green button.\n' \
-                    '   You will press the green button when the sign {1} is shown.\n' \
-                    '[>]Put your right hand on the red button.\n' \
-                    '   You will press the red button when the sign {2} is shown.\n' \
-                    '[>]Your goal is to press the correct button as quickly\n' \
-                    '   as possible without mistakes!\n'
+                    '[>]Each will consist of a representation\n' \
+                    '   of the sign {1} or the sign {2}.\n' \
+                    '[>]Press the green button when the sign\n' \
+                    '   {1} is shown.\n' \
+                    '[>]Press the red button when the sign\n' \
+                    '   {2} is shown.\n' \
+                    '[>]Your goal is to press the correct button \n' \
+                    '   as quickly as possible without mistakes!\n'
 
 PROMPT_TEMPLATE_2 = '[>]Section 2 of 4\n\n' \
                     '[>]You will be shown a sequence of {0} words.\n' \
-                    '[>]Each prompt will consist of either a good word\n' \
-                    '   or a bad word.\n' \
-                    '[>]Put your left hand on the green button.\n' \
-                    '   You will press the green button when a good word is shown.\n' \
-                    '[>]Put your right hand on the red button.\n' \
-                    '   You will press the red button when a bad word is shown.\n' \
-                    '[>]Your goal is to press the correct button as quickly\n' \
-                    '   and accurately as possible!\n'
+                    '[>]Each prompt will consist of either a \n' \
+                    '   good word or a bad word.\n' \
+                    '[>]Press the green button when a good word is\n' \
+                    '   shown.\n' \
+                    '[>]Press the red button when a bad word is \n' \
+                    '   shown.\n' \
+                    '[>]Your goal is to press the correct button as\n' \
+                    '   quickly and accurately as possible!\n'
 
 PROMPT_TEMPLATE_3 = '[>]Section 3 of 4\n\n' \
-                    '[>]Now we will do another {0} that can be either words or signs.\n' \
-                    '[>]Each prompt can be a good word, a bad word,\n' \
-                    '   sign {1}, or {2}.\n' \
-                    '[>]You will press the green button when a good word\n' \
+                    '[>]Now we will do another {0} that \n' \
+                    '   can be either words or signs.\n' \
+                    '[>]Each prompt can be a good word,\n' \
+                    '   a bad word, sign {1},\n' \
+                    '   or sign {2}.\n' \
+                    '[>]Press the green button when a good word\n' \
                     '   or the sign {1} is shown.\n' \
-                    '[>]You will press the red button when a bad word or \n' \
+                    '[>]Press the red button when a bad word or \n' \
                     '   the sign {2} is shown.\n' \
                     '[>]Do the best you can!\n'
 
@@ -50,8 +52,20 @@ PROMPT_TEMPLATE_4 = '[>]Section 4 of 4\n\n' \
                     '[>]We are switching the association!\n' \
                     '[>]Green will be {2} and Good.\n' \
                     '[>]And you guessed it, press red when shown \n' \
-                    '{1} or bad this time.\n' \
+                    '   {1} or bad this time.\n' \
                     '[>]Go fast but no mistakes!\n'
+
+SCORE_STRING =      "[>]We compared the times it took you to\n" \
+                    "   associate {0} with good and {1} \n" \
+                    "   with bad and vice versa.\n" \
+                    "[>]Hmmm....\n" \
+                    "[>]You seem to be about {2:0.3f} seconds faster\n" \
+                    "   when {0} was associated with good.\n" \
+                    "[>]This indicates that you see {0} in a \n" \
+                    "   more favorable light.\n" \
+                    "[>]You are biased!\n" \
+                    "[>]Have a nice day!\n\n" \
+                    "[>]Press the START button to return..."
 
 PRESS_START = "[>]Press the START button to continue..."
 
@@ -60,7 +74,10 @@ PROMPT_TEMPLATES = [PROMPT_TEMPLATE_1, PROMPT_TEMPLATE_2, PROMPT_TEMPLATE_3, PRO
 TEXT_COLOR = (0x5E, 0x00, 0x1F)
 GRAD_COLOR_START = (0xAB, 0xA6, 0xBF, 0xFF)
 GRAD_COLOR_END = (0x59, 0x57, 0x75, 0xFF)
-FONT_SIZE = 48
+TEXT_COLOR = (0xFF, 0xFF, 0xFF)
+GRAD_COLOR_START = (0x00, 0x00, 0x00, 0xFF)
+GRAD_COLOR_END = (0x00, 0x00, 0x00, 0xFF)
+FONT_SIZE = 64
 
 TIMEOUT_EVENT = pygame.USEREVENT + 1
 
@@ -78,7 +95,7 @@ class Cursor(pygame.sprite.Sprite):
         self.text_width = 10 / 18.0 * size
         self.rect = self.image.get_rect(topleft=(self.pos[0] + self.text_width, self.pos[1] + self.text_height))
         self.board = board
-        self.font = pygame.font.SysFont("monospace", size)
+        self.font = pygame.font.Font("SourceCodePro-Bold.ttf", size)
         self.text = ''
         self.cooldown = 0
         self.cooldowns = {'.': 12,
@@ -174,6 +191,8 @@ class Game(pygame.sprite.Sprite):
             'red_times': []
         }
 
+    def get_default_cursor(self):
+        return Cursor(self, (self.w/20, self.h / 20), FONT_SIZE)
 
     def run_game(self):
 
@@ -248,6 +267,11 @@ class Game(pygame.sprite.Sprite):
         first_miss = True
         start_time = datetime.now()
 
+        x_img = pygame.image.load('x_bad_button.png').convert_alpha()
+        x_img = pygame.transform.scale(x_img, (self.min_rect / 2, self.min_rect / 2))
+        check_img = pygame.image.load('check_good_button.png').convert_alpha()
+        check_img = pygame.transform.scale(check_img, (self.min_rect / 2, self.min_rect / 2))
+
         if press_green:
             sign_img = pygame.image.load(TraitMap.get_sign_img(sign1)) if not phase == 3 else pygame.image.load(TraitMap.get_sign_img(sign2))
             word = TraitMap.get_random_good_word()
@@ -259,25 +283,22 @@ class Game(pygame.sprite.Sprite):
         first_run = True
         pygame.event.clear()
         while True:
-            font = pygame.font.SysFont("monospace", FONT_SIZE)
+            font = pygame.font.Font("SourceCodePro-Bold.ttf", FONT_SIZE)
             self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-            rect_fps = Rect(0, 0, 300, self.h / 6)
+            rect_fps = Rect(self.w/20, self.h/20, 400, self.h / 3)
 
             format_prompt = StringFormat(ALIGNMENT_CENTER, ALIGNMENT_CENTER)
 
             draw_string(self.windowSurface, left_text,
                         rect_fps, font, format_prompt, (0x00, 0xFF, 0x00))
 
-            rect_fps = Rect(self.w - self.w/5, self.h/100, 400, self.h / 6)
+            rect_fps = Rect(self.w - self.w/20 - 400, self.h/20, 400, self.h / 3)
 
             draw_string(self.windowSurface, right_text,
                         rect_fps, font, format_prompt, (0xFF, 0x00, 0x00))
 
             sign_img = pygame.transform.scale(sign_img, (self.min_rect / 2, self.min_rect / 2))
-
-            x_img = pygame.image.load('x_bad_button.png').convert_alpha()
-            check_img = pygame.image.load('check_good_button.png').convert_alpha()
 
             if first_run:
                 pygame.display.flip()
@@ -288,7 +309,7 @@ class Game(pygame.sprite.Sprite):
                 self.windowSurface.blit(sign_img, (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
             elif phase == 1:
                 rect_fps = Rect(0, 0, self.w, self.h)
-                font = pygame.font.SysFont("monospace", FONT_SIZE * 2)
+                font = pygame.font.Font("SourceCodePro-Bold.ttf", FONT_SIZE*2)
                 draw_string(self.windowSurface, word,
                             rect_fps, font, format_prompt, (0x00, 0x00, 0xFF))
             elif phase == 2 or phase == 3:
@@ -297,7 +318,7 @@ class Game(pygame.sprite.Sprite):
                                             (self.w / 2 - (self.min_rect / 4), self.h / 2 - (self.min_rect / 4)))
                 else:
                     rect_fps = Rect(0, 0, self.w, self.h)
-                    font = pygame.font.SysFont("monospace", FONT_SIZE * 2)
+                    font = pygame.font.Font("SourceCodePro-Bold.ttf", FONT_SIZE*2)
                     draw_string(self.windowSurface, word,
                                 rect_fps, font, format_prompt, (0x00, 0x00, 0xFF))
 
@@ -325,6 +346,8 @@ class Game(pygame.sprite.Sprite):
                     if first_miss:
                         pygame.time.delay(500)
                         first_miss = False
+                    else:
+                        pygame.time.delay(50)
 
             elif Game.get_n_event(event):
                 if not press_green:
@@ -346,16 +369,19 @@ class Game(pygame.sprite.Sprite):
                         pygame.time.delay(500)
                         pass
                         first_miss = False
+                    else:
+                        pygame.time.delay(50)
 
     def display_start(self):
 
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w/10, self.h / 6), FONT_SIZE)
+        cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
-        cursor.write("[>]Welcome to the astrological implicit bias test kiosk!\n\n[>]Press the START button to begin...")
+        cursor.write("[>]Welcome to the astrological implicit \n"
+                     "   bias test kiosk!\n\n[>]Press the START button to begin...")
 
         running = True
         while running:
@@ -385,7 +411,7 @@ class Game(pygame.sprite.Sprite):
         prompt += '\n\n' + PRESS_START
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w / 10, self.h / 6), FONT_SIZE)
+        cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
         cursor.write(prompt)
@@ -409,7 +435,7 @@ class Game(pygame.sprite.Sprite):
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w/10, self.h / 6), FONT_SIZE)
+        cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
         cursor.write("[>]Student was too slow!\n[>]Womp womp...")
@@ -431,24 +457,14 @@ class Game(pygame.sprite.Sprite):
 
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-        score_string = "[>]We compared the times it took you to\n" \
-                       "   associate {0} with good and {1} with bad\n" \
-                       "   and vice versa.\n" \
-                       "[>]Hmmm....\n" \
-                       "[>]You seem to be about {2:0.3f} seconds faster when\n" \
-                       "  {0} was associated with good.\n" \
-                       "[>]This indicates that you see {0} in a more favorable light.\n" \
-                       "[>]You are biased!\n" \
-                       "[>]Have a nice day!"
-
         delta = (trait1_good_sum - trait2_good_sum) / 1000.0
         if delta > 0:
-            score_string = score_string.format(sign1.name, sign2.name, abs(delta))
+            score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta))
         else:
-            score_string = score_string.format(sign2.name, sign1.name, abs(delta))
+            score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta))
 
         all_sprites = pygame.sprite.Group()
-        cursor = Cursor(self, (self.w / 10, self.h / 6), FONT_SIZE)
+        cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
         cursor.write(score_string)
