@@ -1,7 +1,36 @@
-from random import random, choice
+from random import random, sample, choice
 from enum import Enum, auto
 from os import path, getcwd, listdir
 
+GOOD_WORDS = [
+    'Joyous',
+    'Attractive',
+    'Love',
+    'Appealing',
+    'Friend',
+    'Glad',
+    'Spectacular',
+    'Fabulous',
+    'Celebrate',
+    'Cheerful',
+    'Adore'
+]
+
+BAD_WORDS = [
+    'Yucky',
+    'Hate',
+    'Bothersome',
+    'Humiliate',
+    'Nasty',
+    'Angry',
+    'Hurtful',
+    'Disgust',
+    'Pain',
+    'Scorn',
+    'Sadness',
+    'Selfish',
+    'Negative'
+]
 
 class Signs(Enum):
     Aquarius = auto(),
@@ -64,6 +93,19 @@ sign_paths = {
 class TraitMap(object):
 
     @staticmethod
+    def get_random_two_signs():
+        r = sample(list(Signs), 2)
+        return r[0], r[1]
+
+    @staticmethod
+    def get_random_bad_word():
+        return choice(list(BAD_WORDS))
+
+    @staticmethod
+    def get_random_good_word():
+        return choice(list(GOOD_WORDS))
+
+    @staticmethod
     def get_random_target_trait_sign_pair():
         sign, trait = TraitMap.get_random_trait_sign_pair()
         while (not(sign in hit_map.keys())) or (not(trait in hit_map[sign])):
@@ -73,7 +115,7 @@ class TraitMap(object):
     @staticmethod
     def get_random_nontarget_trait_sign_pair():
         sign, trait = TraitMap.get_random_trait_sign_pair()
-        while (not(sign in hit_map.keys())) or trait in hit_map[sign]:
+        while (sign in hit_map.keys()) and trait in hit_map[sign]:
             sign, trait = TraitMap.get_random_trait_sign_pair()
         return trait, sign
 
