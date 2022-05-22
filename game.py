@@ -222,8 +222,10 @@ class Game(pygame.sprite.Sprite):
                 return False
             if i == 2:
                 phase_2_sum = run_sum
+                print(sign1.name, "as good took", run_sum / 1000.0)
             if i == 3:
                 phase_3_sum = run_sum
+                print(sign2.name, "as good took", run_sum / 1000.0)
 
         if not self.display_score(phase_2_sum, phase_3_sum, sign1, sign2):
             return False
@@ -240,15 +242,13 @@ class Game(pygame.sprite.Sprite):
         if not self.display_prompt(sign1, sign2, phase):
             return False, 0
 
-        run_hits = ([False] * int(self.num_questions / 2))
-        run_hits = run_hits + ([True] * int((self.num_questions + 1) / 2))
-        shuffle(run_hits)
+        choices = ([[True, False]] * int(self.num_questions / 4))
+        choices += ([[False, True]] * int((self.num_questions + 1) / 4))
+        choices += ([[False, False]] * int((self.num_questions + 2) / 4))
+        choices += ([[True, True]] * int((self.num_questions + 3) / 4))
+        shuffle(choices)
 
-        choose_signs = ([False] * int(self.num_questions / 2))
-        choose_signs = choose_signs + ([True] * int((self.num_questions + 1) / 2))
-        shuffle(choose_signs)
-
-        for press_green, choose_sign in zip(choose_signs, run_hits):
+        for press_green, choose_sign in choices:
             if not self.run_game_instance(sign1, sign2, phase, run_record, press_green, choose_sign):
                 return False, 0
 
@@ -308,8 +308,6 @@ class Game(pygame.sprite.Sprite):
 
             draw_string(self.windowSurface, right_text,
                         rect_fps, font, format_prompt, (0xFF, 0x00, 0x00))
-
-
 
             if first_run:
                 pygame.display.flip()
