@@ -72,7 +72,7 @@ PRESS_START = "[>]Press the Start button to continue..."
 
 PROMPT_TEMPLATES = [PROMPT_TEMPLATE_1, PROMPT_TEMPLATE_2, PROMPT_TEMPLATE_3, PROMPT_TEMPLATE_4]
 
-GAME_TIMEOUT = 60000
+GAME_TIMEOUT = 20000
 GAME_TIMEOUT_SHORT = 5000
 
 TEXT_COLOR = (0x5E, 0x00, 0x1F)
@@ -82,7 +82,7 @@ TEXT_COLOR = (0xFF, 0xFF, 0xFF)
 GRAD_COLOR_START = (0x00, 0x00, 0x00, 0xFF)
 GRAD_COLOR_END = (0x00, 0x00, 0x00, 0xFF)
 FONT_SIZE = 64
-CURSOR_SPEED_FACTOR = 0.3
+CURSOR_SPEED_FACTOR = 0.1
 INCORRECT_PUNISH = 1000
 
 TIMEOUT_EVENT = pygame.USEREVENT + 1
@@ -143,10 +143,12 @@ class Cursor(pygame.sprite.Sprite):
             if letter == '\n':
                 self.rect.move_ip((0, self.text_height))
                 self.rect.x = self.text_width + self.pos[0]
+                pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             else:
                 s = self.font.render(letter, True, TEXT_COLOR)
                 self.board.add_letter(s, self.rect.topleft)
                 self.rect.move_ip((self.text_width, 0))
+                pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             self.cooldown = self.cooldowns.get(letter, 3)
 
         if self.cooldown:
@@ -154,6 +156,7 @@ class Cursor(pygame.sprite.Sprite):
 
     def write_instant(self, text):
         self.text = list(text)
+        pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
         while len(self.text) > 0:
             letter = self.text.pop(0)
             if letter == '\n':
@@ -211,12 +214,12 @@ class Game(pygame.sprite.Sprite):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == TIMEOUT_EVENT and watch_timeout:
             if event.type == TIMEOUT_EVENT:
                 if display_warning and self.display_timeout_warning():
-                    return False
+                    return False, True
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT_SHORT, loops=1)
             else:
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
-            return True
-        return False
+            return True, False
+        return False, False
 
     @staticmethod
     def get_run_template():
@@ -392,7 +395,7 @@ class Game(pygame.sprite.Sprite):
             pygame.display.flip()
 
             event = pygame.event.wait(timeout=GAME_TIMEOUT)
-            if self.get_esc_event(event):
+            if self.get_esc_event(event)[0]:
                 return False
             elif Game.get_y_event(event):
                 if press_green:
@@ -449,7 +452,7 @@ class Game(pygame.sprite.Sprite):
 
         cursor.write("[>]Welcome to the astrological implicit \n"
                      "   bias test kiosk!\n"
-                     "[>]This test will take approximately 5\n"
+                     "[>]This test will take approximately 3\n"
                      "   minutes.\n\n"
                      "[>]Press the START button to begin...")
 
@@ -458,7 +461,7 @@ class Game(pygame.sprite.Sprite):
 
             events = pygame.event.get()
             for event in events:
-                if self.get_esc_event(event, False):
+                if self.get_esc_event(event, False)[0]:
                     return False
                 if Game.get_start_event(event) and cursor.done:
                     return True
@@ -471,33 +474,35 @@ class Game(pygame.sprite.Sprite):
     def display_prompt(self, sign1, sign2, phase: int):
         sign1 = sign1.name
         sign2 = sign2.name
-
         prompt_template = PROMPT_TEMPLATES[phase]
 
         prompt = prompt_template.format(self.num_questions, sign1.upper(), sign2.upper())
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
-
         prompt += '\n' + PRESS_START
-
-        all_sprites = pygame.sprite.Group()
-        cursor = self.get_default_cursor()
-        all_sprites.add(cursor)
-
-        cursor.write(prompt)
-
         while True:
-            events = pygame.event.get()
-            for event in events:
-                if self.get_esc_event(event):
-                    return False
-                elif Game.get_start_event(event) and cursor.done:
-                    return True
 
-            all_sprites.update()
-            all_sprites.draw(self.windowSurface)
-            pygame.display.flip()
-            clock.tick(60)
+            self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
+
+            all_sprites = pygame.sprite.Group()
+            cursor = self.get_default_cursor()
+            all_sprites.add(cursor)
+
+            cursor.write(prompt)
+            exit_loop = False
+            while not exit_loop:
+                events = pygame.event.get()
+                for event in events:
+                    esc_pressed, timeout_aborted = self.get_esc_event(event)
+                    if esc_pressed:
+                        return False
+                    if timeout_aborted:
+                        exit_loop = True
+                    elif Game.get_start_event(event) and cursor.done:
+                        return True
+
+                all_sprites.update()
+                all_sprites.draw(self.windowSurface)
+                pygame.display.flip()
+                clock.tick(60)
 
     def display_timeout_warning(self):
 
@@ -511,12 +516,12 @@ class Game(pygame.sprite.Sprite):
 
         cursor.write("[>]Test will time out in... {}".format(timer_seconds))
 
-        pygame.time.set_timer(TIMEOUT_WARNING_TICK, 1000)
+        pygame.time.set_timer(TIMEOUT_WARNING_TICK, 1000, loops=1)
 
         while True:
             events = pygame.event.get()
             for event in events:
-                if self.get_esc_event(event):
+                if self.get_esc_event(event)[0]:
                     return False
                 elif event.type == TIMEOUT_WARNING_TICK:
                     timer_seconds = timer_seconds - 1
@@ -526,6 +531,8 @@ class Game(pygame.sprite.Sprite):
                     cursor.write_instant("[>]Test will time out in... {}".format(timer_seconds))
                     if timer_seconds == 0:
                         return False
+                    else:
+                        pygame.time.set_timer(TIMEOUT_WARNING_TICK, 1000, loops=1)
                 elif Game.get_start_event(event) or Game.get_n_event(event) or Game.get_y_event(event):
                     return True
 
@@ -547,7 +554,7 @@ class Game(pygame.sprite.Sprite):
         while True:
             events = pygame.event.get()
             for event in events:
-                if self.get_esc_event(event, display_warning=False):
+                if self.get_esc_event(event, display_warning=False)[0]:
                     return False
                 elif Game.get_start_event(event):
                     return True
@@ -558,35 +565,39 @@ class Game(pygame.sprite.Sprite):
             clock.tick(60)
 
     def display_score(self, trait1_good_sum, trait2_good_sum, sign1, sign2):
-
-        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
-
-        delta = (trait1_good_sum - trait2_good_sum) / 1000.0
-        if delta < 0:
-            score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta))
-        else:
-            score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta))
-
-        all_sprites = pygame.sprite.Group()
-        cursor = self.get_default_cursor()
-        all_sprites.add(cursor)
-
-        cursor.write(score_string)
-
         while True:
-            events = pygame.event.get()
-            for event in events:
-                if self.get_esc_event(event):
-                    return False
-                elif Game.get_start_event(event) and cursor.done:
-                    return False
-                elif self.get_y_event(event) and cursor.done:
-                    return True
+            self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-            all_sprites.update()
-            all_sprites.draw(self.windowSurface)
-            pygame.display.flip()
-            clock.tick(60)
+            delta = (trait1_good_sum - trait2_good_sum) / 1000.0
+            if delta < 0:
+                score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta))
+            else:
+                score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta))
+
+            all_sprites = pygame.sprite.Group()
+            cursor = self.get_default_cursor()
+            all_sprites.add(cursor)
+
+            cursor.write(score_string)
+
+            exit_loop = False
+            while not exit_loop:
+                events = pygame.event.get()
+                for event in events:
+                    esc_pressed, timeout_aborted = self.get_esc_event(event)
+                    if esc_pressed:
+                        return False
+                    if timeout_aborted:
+                        exit_loop = True
+                    elif Game.get_start_event(event) and cursor.done:
+                        return False
+                    elif self.get_y_event(event) and cursor.done:
+                        return True
+
+                all_sprites.update()
+                all_sprites.draw(self.windowSurface)
+                pygame.display.flip()
+                clock.tick(60)
 
 
 
