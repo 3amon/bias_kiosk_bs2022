@@ -14,7 +14,7 @@ w, h = pygame.display.get_surface().get_size()
 min_rect = min(w, h)
 
 running = True
-game = Game(windowSurface, num_questions=7)
+game = Game(windowSurface, num_questions=1)
 pygame.joystick.init()
 for i in range(pygame.joystick.get_count()):
     joystick = pygame.joystick.Joystick(i)

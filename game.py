@@ -11,9 +11,8 @@ from pymongo import MongoClient
 from uuid import uuid4
 import pygame
 
-GAME_TIMEOUT = 60000
-GAME_TIMEOUT_SHORT = 10000
-PROMPT_TEMPLATE_1 = '[>]Section 1 of 4\n\n' \
+
+PROMPT_TEMPLATE_1 = '[>]Practice Test 1 of 2\n\n' \
                     '[>]You will be shown a sequence of {0} images.\n' \
                     '[>]Each will consist of a representation\n' \
                     '   of the sign {1} or the sign {2}.\n' \
@@ -21,10 +20,11 @@ PROMPT_TEMPLATE_1 = '[>]Section 1 of 4\n\n' \
                     '   {1} is shown.\n' \
                     '[>]Press the red button when the sign\n' \
                     '   {2} is shown.\n' \
+                    '[>]This test measures your reaction time.\n' \
                     '[>]Your goal is to press the correct button \n' \
                     '   as quickly as possible without mistakes!\n'
 
-PROMPT_TEMPLATE_2 = '[>]Section 2 of 4\n\n' \
+PROMPT_TEMPLATE_2 = '[>]Practice Test 2 of 2\n\n' \
                     '[>]You will be shown a sequence of {0} words.\n' \
                     '[>]Each prompt will consist of either a \n' \
                     '   good word or a bad word.\n' \
@@ -35,7 +35,7 @@ PROMPT_TEMPLATE_2 = '[>]Section 2 of 4\n\n' \
                     '[>]Your goal is to press the correct button as\n' \
                     '   quickly and accurately as possible!\n'
 
-PROMPT_TEMPLATE_3 = '[>]Section 3 of 4\n\n' \
+PROMPT_TEMPLATE_3 = '[>]Test 1 of 2\n\n' \
                     '[>]Now we will do another {0} that \n' \
                     '   can be either words or signs.\n' \
                     '[>]Each prompt can be a good word,\n' \
@@ -47,7 +47,7 @@ PROMPT_TEMPLATE_3 = '[>]Section 3 of 4\n\n' \
                     '   the sign {2} is shown.\n' \
                     '[>]Do the best you can!\n'
 
-PROMPT_TEMPLATE_4 = '[>]Section 4 of 4\n\n' \
+PROMPT_TEMPLATE_4 = '[>]Test 2 of 2\n\n' \
                     '[>]Another {0} of words and images.\n' \
                     '[>]We are switching the association!\n' \
                     '[>]Green will be {2} and Good.\n' \
@@ -65,11 +65,15 @@ SCORE_STRING =      "[>]We compared the times it took you to\n" \
                     "   more favorable light.\n" \
                     "[>]You are biased!\n" \
                     "[>]Have a nice day!\n\n" \
-                    "[>]Press the START button to return..."
+                    "[>]Press the Green button to play again.\n" \
+                    "[>]Press the Start button to return..."
 
-PRESS_START = "[>]Press the START button to continue..."
+PRESS_START = "[>]Press the Start button to continue..."
 
 PROMPT_TEMPLATES = [PROMPT_TEMPLATE_1, PROMPT_TEMPLATE_2, PROMPT_TEMPLATE_3, PROMPT_TEMPLATE_4]
+
+GAME_TIMEOUT = 60000
+GAME_TIMEOUT_SHORT = 5000
 
 TEXT_COLOR = (0x5E, 0x00, 0x1F)
 GRAD_COLOR_START = (0xAB, 0xA6, 0xBF, 0xFF)
@@ -78,8 +82,12 @@ TEXT_COLOR = (0xFF, 0xFF, 0xFF)
 GRAD_COLOR_START = (0x00, 0x00, 0x00, 0xFF)
 GRAD_COLOR_END = (0x00, 0x00, 0x00, 0xFF)
 FONT_SIZE = 64
+CURSOR_SPEED_FACTOR = 0.3
+INCORRECT_PUNISH = 1000
 
 TIMEOUT_EVENT = pygame.USEREVENT + 1
+TIMEOUT_WARNING_TICK = pygame.USEREVENT + 2
+WARNING_TIME = 10
 
 ALLOW_START_SKIP = True
 
@@ -93,13 +101,17 @@ def resize_keep_ratio(src, max_px):
 
 class Cursor(pygame.sprite.Sprite):
 
-    def __init__(self, board, pos, size=FONT_SIZE):
+    def __init__(self, board, pos, size=FONT_SIZE, speed_factor=CURSOR_SPEED_FACTOR, use_center=False):
         pygame.sprite.Sprite.__init__(self)
         self.pos = pos
+        self.init_pos = pos
         self.image = pygame.Surface(pos, pygame.SRCALPHA)
         self.text_height = 17 / 18.0 * size
         self.text_width = 10 / 18.0 * size
+        self.use_center = use_center
         self.rect = self.image.get_rect(topleft=(self.pos[0] + self.text_width, self.pos[1] + self.text_height))
+        if self.use_center:
+            self.rect = self.image.get_rect(center=(self.pos[0], self.pos[1] + self.text_height))
         self.board = board
         self.font = pygame.font.Font("SourceCodePro-Bold.ttf", size)
         self.text = ''
@@ -109,6 +121,8 @@ class Cursor(pygame.sprite.Sprite):
                         ']': 18,
                         ' ': 5,
                         '\n': 5}
+        for c in self.cooldowns.keys():
+            self.cooldowns[c] = int(self.cooldowns[c] * speed_factor)
 
     @property
     def done(self):
@@ -116,6 +130,12 @@ class Cursor(pygame.sprite.Sprite):
 
     def write(self, text):
         self.text = list(text)
+
+    def reset_cursor(self):
+        self.pos = self.init_pos
+        self.rect = self.image.get_rect(topleft=(self.pos[0] + self.text_width, self.pos[1] + self.text_height))
+        if self.use_center:
+            self.rect = self.image.get_rect(center=(self.pos[0], self.pos[1] + self.text_height))
 
     def update(self):
         if not self.cooldown and self.text:
@@ -131,6 +151,19 @@ class Cursor(pygame.sprite.Sprite):
 
         if self.cooldown:
             self.cooldown -= 1
+
+    def write_instant(self, text):
+        self.text = list(text)
+        while len(self.text) > 0:
+            letter = self.text.pop(0)
+            if letter == '\n':
+                self.rect.move_ip((0, self.text_height))
+                self.rect.x = self.text_width + self.pos[0]
+            else:
+                s = self.font.render(letter, True, TEXT_COLOR)
+                self.board.add_letter(s, self.rect.topleft)
+                self.rect.move_ip((self.text_width, 0))
+
 
 class Game(pygame.sprite.Sprite):
 
@@ -174,10 +207,11 @@ class Game(pygame.sprite.Sprite):
             return True
         return False
 
-    @staticmethod
-    def get_esc_event(event, watch_timeout=True):
+    def get_esc_event(self, event, watch_timeout=True, display_warning=True):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE or event.type == TIMEOUT_EVENT and watch_timeout:
             if event.type == TIMEOUT_EVENT:
+                if display_warning and self.display_timeout_warning():
+                    return False
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT_SHORT, loops=1)
             else:
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
@@ -191,6 +225,7 @@ class Game(pygame.sprite.Sprite):
             'sign2': '',
             'timestamp': '',
             'guid': '',
+            'player_guid': '',
             'phase': 0,
             'button_error_count': 0,
             'green_times': [],
@@ -198,26 +233,41 @@ class Game(pygame.sprite.Sprite):
         }
 
     def get_default_cursor(self):
-        return Cursor(self, (self.w/20, self.h / 20), FONT_SIZE)
+        return Cursor(self, (self.w/20, self.h / 20))
 
-    def run_game(self):
+    def get_lower_right_cursor(self):
+        return Cursor(self, (self.w - 100, self.h - 200))
+
+    def get_lower_left_cursor(self):
+        return Cursor(self, (self.w / 20, self.h - 200))
+
+    def get_lower_middle_cursor(self):
+        return Cursor(self, (self.w / 2, self.h + 600), use_center=True)
+
+    def run_game(self, skip_intro=False, player_guid=None):
 
         guid = uuid4()
+        if not player_guid:
+            player_guid = uuid4()
         phase_2_sum = 0
         phase_3_sum = 0
 
+        if skip_intro:
+            start_phase = 2
+        else:
+            start_phase = 0
+
         sign1, sign2 = TraitMap.get_random_two_signs()
-        for i in range(4):
+        for i in range(start_phase, 4):
 
             if i == 2 or i == 3:
-                self.num_questions = self.base_num_questions * 2
+                self.num_questions = self.base_num_questions * 3
             elif i == 0:
-                self.num_questions = int(self.base_num_questions / 2)
                 self.num_questions = self.base_num_questions
             else:
                 self.num_questions = self.base_num_questions
 
-            keep_going, run_sum = self.do_run(guid, sign1, sign2, i)
+            keep_going, run_sum = self.do_run(guid, sign1, sign2, i, player_guid)
             if not keep_going:
                 return False
             if i == 2:
@@ -228,16 +278,19 @@ class Game(pygame.sprite.Sprite):
                 print(sign2.name, "as good took", run_sum / 1000.0)
 
         if not self.display_score(phase_2_sum, phase_3_sum, sign1, sign2):
-            return False
-        return True
+            return True
+        else:
+            self.run_game(skip_intro=True, player_guid=player_guid)
 
-    def do_run(self, guid, sign1, sign2, phase: int):
+
+    def do_run(self, guid, sign1, sign2, phase: int, player_guid):
         run_record = self.get_run_template()
         run_record['sign1'] = sign1.name
         run_record['sign2'] = sign2.name
         run_record['timestamp'] = datetime.now()
         run_record['guid'] = guid
         run_record['phase'] = phase
+        run_record['player_guid'] = player_guid
 
         if not self.display_prompt(sign1, sign2, phase):
             return False, 0
@@ -248,14 +301,14 @@ class Game(pygame.sprite.Sprite):
         choices += ([[True, True]] * int((self.num_questions + 3) / 4))
         shuffle(choices)
 
-        for press_green, choose_sign in choices:
-            if not self.run_game_instance(sign1, sign2, phase, run_record, press_green, choose_sign):
+        for i, [press_green, choose_sign] in enumerate(choices):
+            if not self.run_game_instance(sign1, sign2, phase, run_record, press_green, choose_sign, i):
                 return False, 0
 
         self.runs.insert_one(run_record)
         return True, sum(run_record['green_times']) + sum(run_record['red_times'])
 
-    def run_game_instance(self, sign1, sign2, phase, run_record, press_green, choose_sign):
+    def run_game_instance(self, sign1, sign2, phase, run_record, press_green, choose_sign, question_number):
 
         sign1_name = sign1.name
         sign2_name = sign2.name
@@ -290,7 +343,7 @@ class Game(pygame.sprite.Sprite):
             word = TraitMap.get_random_bad_word()
 
         sign_img = pygame.transform.smoothscale(sign_img, resize_keep_ratio(sign_img.get_size(), self.min_rect / 2))
-
+        cursor = self.get_lower_middle_cursor()
         first_run = True
         pygame.event.clear()
         while True:
@@ -308,6 +361,11 @@ class Game(pygame.sprite.Sprite):
 
             draw_string(self.windowSurface, right_text,
                         rect_fps, font, format_prompt, (0xFF, 0x00, 0x00))
+
+            cursor.reset_cursor()
+            cursor.write_instant("Question {}/{}"
+                                 " | "
+                                 "Round {}/{}   ".format(question_number + 1, self.num_questions, phase + 1, 4))
 
             if first_run:
                 pygame.display.flip()
@@ -334,7 +392,7 @@ class Game(pygame.sprite.Sprite):
             pygame.display.flip()
 
             event = pygame.event.wait(timeout=GAME_TIMEOUT)
-            if Game.get_esc_event(event):
+            if self.get_esc_event(event):
                 return False
             elif Game.get_y_event(event):
                 if press_green:
@@ -353,7 +411,7 @@ class Game(pygame.sprite.Sprite):
 
                     pygame.display.flip()
                     if first_miss:
-                        pygame.time.delay(500)
+                        pygame.time.delay(INCORRECT_PUNISH)
                         first_miss = False
                     else:
                         pygame.time.delay(50)
@@ -375,7 +433,7 @@ class Game(pygame.sprite.Sprite):
 
                     pygame.display.flip()
                     if first_miss:
-                        pygame.time.delay(500)
+                        pygame.time.delay(INCORRECT_PUNISH)
                         pass
                         first_miss = False
                     else:
@@ -390,14 +448,17 @@ class Game(pygame.sprite.Sprite):
         all_sprites.add(cursor)
 
         cursor.write("[>]Welcome to the astrological implicit \n"
-                     "   bias test kiosk!\n\n[>]Press the START button to begin...")
+                     "   bias test kiosk!\n"
+                     "[>]This test will take approximately 5\n"
+                     "   minutes.\n\n"
+                     "[>]Press the START button to begin...")
 
         running = True
         while running:
 
             events = pygame.event.get()
             for event in events:
-                if Game.get_esc_event(event, False):
+                if self.get_esc_event(event, False):
                     return False
                 if Game.get_start_event(event) and cursor.done:
                     return True
@@ -417,7 +478,7 @@ class Game(pygame.sprite.Sprite):
 
         self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
-        prompt += '\n\n' + PRESS_START
+        prompt += '\n' + PRESS_START
 
         all_sprites = pygame.sprite.Group()
         cursor = self.get_default_cursor()
@@ -428,7 +489,7 @@ class Game(pygame.sprite.Sprite):
         while True:
             events = pygame.event.get()
             for event in events:
-                if Game.get_esc_event(event):
+                if self.get_esc_event(event):
                     return False
                 elif Game.get_start_event(event) and cursor.done:
                     return True
@@ -438,6 +499,40 @@ class Game(pygame.sprite.Sprite):
             pygame.display.flip()
             clock.tick(60)
 
+    def display_timeout_warning(self):
+
+        self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
+
+        all_sprites = pygame.sprite.Group()
+        cursor = self.get_default_cursor()
+        all_sprites.add(cursor)
+
+        timer_seconds = WARNING_TIME
+
+        cursor.write("[>]Test will time out in... {}".format(timer_seconds))
+
+        pygame.time.set_timer(TIMEOUT_WARNING_TICK, 1000)
+
+        while True:
+            events = pygame.event.get()
+            for event in events:
+                if self.get_esc_event(event):
+                    return False
+                elif event.type == TIMEOUT_WARNING_TICK:
+                    timer_seconds = timer_seconds - 1
+                    self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END),
+                                            (1, 1))
+                    cursor.reset_cursor()
+                    cursor.write_instant("[>]Test will time out in... {}".format(timer_seconds))
+                    if timer_seconds == 0:
+                        return False
+                elif Game.get_start_event(event) or Game.get_n_event(event) or Game.get_y_event(event):
+                    return True
+
+            all_sprites.update()
+            all_sprites.draw(self.windowSurface)
+            pygame.display.flip()
+            clock.tick(60)
 
     def display_timeout(self):
 
@@ -447,12 +542,12 @@ class Game(pygame.sprite.Sprite):
         cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
-        cursor.write("[>]Student was too slow!\n[>]Womp womp...")
+        cursor.write("[>]Student was too slow!\n     \n\n\n                    \n\n\n[>]Womp womp...")
 
         while True:
             events = pygame.event.get()
             for event in events:
-                if Game.get_esc_event(event):
+                if self.get_esc_event(event, display_warning=False):
                     return False
                 elif Game.get_start_event(event):
                     return True
@@ -481,9 +576,11 @@ class Game(pygame.sprite.Sprite):
         while True:
             events = pygame.event.get()
             for event in events:
-                if Game.get_esc_event(event):
+                if self.get_esc_event(event):
                     return False
-                elif Game.get_start_event(event):
+                elif Game.get_start_event(event) and cursor.done:
+                    return False
+                elif self.get_y_event(event) and cursor.done:
                     return True
 
             all_sprites.update()
