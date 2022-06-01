@@ -104,6 +104,21 @@ sign_paths = {
     Signs.Taurus: path.join(signs_dir, "taurus.png")
 }
 
+sign_paths_new = {
+    Signs.Aquarius: path.join(signs_dir, "aquarius.svg"),
+    Signs.Aries: path.join(signs_dir, "aries.svg"),
+    Signs.Virgo: path.join(signs_dir, "virgo.svg"),
+    Signs.Cancer: path.join(signs_dir, "cancer.svg"),
+    Signs.Capricorn: path.join(signs_dir, "capricorn.svg"),
+    Signs.Gemini: path.join(signs_dir, "gemini.svg"),
+    Signs.Leo: path.join(signs_dir, "leo.svg"),
+    Signs.Libra: path.join(signs_dir, "libra.svg"),
+    Signs.Pisces: path.join(signs_dir, "pisces.svg"),
+    Signs.Sagittarius: path.join(signs_dir, "sagittarius.svg"),
+    Signs.Scorpio: path.join(signs_dir, "scorpio.svg"),
+    Signs.Taurus: path.join(signs_dir, "taurus.svg")
+}
+
 
 class TraitMap(object):
 

@@ -10,6 +10,7 @@ from trait_map import TraitMap
 from pymongo import MongoClient
 from uuid import uuid4
 import pygame
+import numpy as np
 
 
 PROMPT_TEMPLATE_1 = '[>]Practice Test 1 of 2\n\n' \
@@ -64,7 +65,9 @@ SCORE_STRING =      "[>]We compared the times it took you to\n" \
                     "[>]This indicates that you see {0} in a \n" \
                     "   more favorable light.\n" \
                     "[>]You are biased!\n" \
-                    "[>]Have a nice day!\n\n" \
+                    "[>]Have a nice day!\n" \
+                    "[>]Oh... compared the average of our students \n" \
+                    "   you are {3:0.3f} seconds {4} biased.\n\n" \
                     "[>]Press the Green button to play again.\n" \
                     "[>]Press the Start button to return..."
 
@@ -72,8 +75,7 @@ PRESS_START = "[>]Press the Start button to continue..."
 
 PROMPT_TEMPLATES = [PROMPT_TEMPLATE_1, PROMPT_TEMPLATE_2, PROMPT_TEMPLATE_3, PROMPT_TEMPLATE_4]
 
-GAME_TIMEOUT = 20000
-GAME_TIMEOUT_SHORT = 5000
+GAME_TIMEOUT = 10000
 
 TEXT_COLOR = (0x5E, 0x00, 0x1F)
 GRAD_COLOR_START = (0xAB, 0xA6, 0xBF, 0xFF)
@@ -93,11 +95,22 @@ ALLOW_START_SKIP = True
 
 clock = pygame.time.Clock()
 
-
 def resize_keep_ratio(src, max_px):
     rnd = min(max_px / src[0], max_px / src[1])
     return src[0] * rnd, src[1] * rnd
 
+class StreamingMovingAverage:
+    def __init__(self, window_size):
+        self.window_size = window_size
+        self.values = []
+        self.sum = 0
+
+    def process(self, value):
+        self.values.append(value)
+        self.sum += value
+        if len(self.values) > self.window_size:
+            self.sum -= self.values.pop(0)
+        return float(self.sum) / len(self.values)
 
 class Cursor(pygame.sprite.Sprite):
 
@@ -180,8 +193,7 @@ class Game(pygame.sprite.Sprite):
         self.client = MongoClient(uuidRepresentation='standard')
         self.db = self.client.kiosk_database
         self.runs = self.db.runs
-        self.avg_target = 0.0
-        self.avg_miss = 0.0
+        self.moving_avg = StreamingMovingAverage(1000)
 
     def add_letter(self, s, pos):
         self.windowSurface.blit(s, pos)
@@ -215,7 +227,6 @@ class Game(pygame.sprite.Sprite):
             if event.type == TIMEOUT_EVENT:
                 if display_warning and self.display_timeout_warning():
                     return False, True
-                pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT_SHORT, loops=1)
             else:
                 pygame.time.set_timer(TIMEOUT_EVENT, GAME_TIMEOUT, loops=1)
             return True, False
@@ -285,7 +296,6 @@ class Game(pygame.sprite.Sprite):
         else:
             self.run_game(skip_intro=True, player_guid=player_guid)
 
-
     def do_run(self, guid, sign1, sign2, phase: int, player_guid):
         run_record = self.get_run_template()
         run_record['sign1'] = sign1.name
@@ -340,10 +350,12 @@ class Game(pygame.sprite.Sprite):
         if press_green:
             sign_img = pygame.image.load(TraitMap.get_sign_img(sign1)) if not phase == 3 else pygame.image.load(TraitMap.get_sign_img(sign2))
             word = TraitMap.get_random_good_word()
+            sign_word = sign1_name
 
         else:
             sign_img = pygame.image.load(TraitMap.get_sign_img(sign2)) if not phase == 3 else pygame.image.load(TraitMap.get_sign_img(sign1))
             word = TraitMap.get_random_bad_word()
+            sign_word = sign2_name
 
         sign_img = pygame.transform.smoothscale(sign_img, resize_keep_ratio(sign_img.get_size(), self.min_rect / 2))
         cursor = self.get_lower_middle_cursor()
@@ -450,8 +462,8 @@ class Game(pygame.sprite.Sprite):
         cursor = self.get_default_cursor()
         all_sprites.add(cursor)
 
-        cursor.write("[>]Welcome to the astrological implicit \n"
-                     "   bias test kiosk!\n"
+        cursor.write("[>]Welcome to Dr. Cornelius Vandergraff's\n"
+                     "   astrological implicit bias test kiosk!\n"
                      "[>]This test will take approximately 3\n"
                      "   minutes.\n\n"
                      "[>]Press the START button to begin...")
@@ -521,7 +533,7 @@ class Game(pygame.sprite.Sprite):
         while True:
             events = pygame.event.get()
             for event in events:
-                if self.get_esc_event(event)[0]:
+                if self.get_esc_event(event, display_warning=False)[0]:
                     return False
                 elif event.type == TIMEOUT_WARNING_TICK:
                     timer_seconds = timer_seconds - 1
@@ -569,10 +581,20 @@ class Game(pygame.sprite.Sprite):
             self.windowSurface.blit(gradients.vertical((self.w, self.h), GRAD_COLOR_START, GRAD_COLOR_END), (1, 1))
 
             delta = (trait1_good_sum - trait2_good_sum) / 1000.0
-            if delta < 0:
-                score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta))
+
+            avg_time = self.moving_avg.process(abs(delta))
+
+            if abs(delta) > avg_time:
+                word_compare = "more"
+            elif abs(delta) == avg_time:
+                word_compare = "(or equally)"
             else:
-                score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta))
+                word_compare = "less"
+
+            if delta < 0:
+                score_string = SCORE_STRING.format(sign1.name, sign2.name, abs(delta), abs(avg_time - abs(delta)), word_compare)
+            else:
+                score_string = SCORE_STRING.format(sign2.name, sign1.name, abs(delta), abs(avg_time - abs(delta)), word_compare)
 
             all_sprites = pygame.sprite.Group()
             cursor = self.get_default_cursor()
@@ -598,7 +620,3 @@ class Game(pygame.sprite.Sprite):
                 all_sprites.draw(self.windowSurface)
                 pygame.display.flip()
                 clock.tick(60)
-
-
-
-
